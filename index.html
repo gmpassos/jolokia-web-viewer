@@ -16,24 +16,22 @@
 <html>
 <h1>[Jolokia Web Viewer]</h1>
 
-<hr>
-<h2>Memory Usage</h2>
-
 <input type="text" id="endpoint" size="50" value="https://your-gateway/actuator/jolokia"/>
 <input type="submit" id="start" value="Start"/>
 
-<div id="memory" style="width:600px; height:300px; margin-top: 20px;"></div>
+<hr>
+<h2>Memory Usage</h2>
 
+<div id="plotMemory" style="width: 100%; height:400px; margin-top: 20px;"></div>
 <input type="submit" id="gc" value="Garbage Collection" disabled="true">
-
 <br><br>
+
 <hr>
 <div style="width: 100%; text-align: center"><a href="https://github.com/gmpassos/jolokia-web-viewer" target="_blank">jolokia-web-viewer@GitHub</a></div>
 
 <script id="source" language="javascript" type="text/javascript">
 
-  var data = [];
-  var j4p ;
+  let j4p ;
 
   function start() {
     var inputEndpoint = $("#endpoint") ;
@@ -50,6 +48,22 @@
     run();
   }
 
+  let datasetMemMax = [];
+  let datasetMemUsed = [];
+
+  function doPlot() {
+    $.plot("#plotMemory", [
+      { data: datasetMemMax, label: "Max Memory" },
+      { data: datasetMemUsed, label: "Used Memory"}
+    ], {
+      series: {
+        lines: {lineWidth: 2}
+      },
+      xaxes: [ { mode: "time"} ],
+    });
+  }
+
+
   function run() {
     j4p.request({
                   type: "read",
@@ -58,11 +72,16 @@
                 },
                 {
                   success: function(resp) {
-                    var value = resp.value.used / (1024 * 1024);
-                    var time = resp.timestamp * 1000;
-                    data.push([time, value]);
-                    $.plot($("#memory"),[data],{xaxis: { mode: "time" }});
-                    setTimeout(run,1000);
+                    let memMax = resp.value.max / (1024 * 1024);
+                    let memUsed = resp.value.used / (1024 * 1024);
+                    let time = resp.timestamp * 1000;
+
+                    datasetMemMax.push([time, memMax]);
+                    datasetMemUsed.push([time, memUsed]);
+
+                    doPlot();
+
+                    setTimeout(run,2000);
                   }
                 });
   }
