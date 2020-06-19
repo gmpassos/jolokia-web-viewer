@@ -13,9 +13,10 @@
   <script src="js/jolokia-min.js"></script>
   <script src="js/jolokia-simple-min.js"></script>
 </head>
-<body>
+<html>
 <h1>[Jolokia Web Viewer]</h1>
 
+<hr>
 <h2>Memory Usage</h2>
 
 <input type="text" id="endpoint" size="50" value="https://your-gateway/actuator/jolokia"/>
@@ -23,7 +24,11 @@
 
 <div id="memory" style="width:600px; height:300px; margin-top: 20px;"></div>
 
-<input type="submit" id="gc" value="Garbage Collection"/ disabled="true">
+<input type="submit" id="gc" value="Garbage Collection" disabled="true">
+
+<br><br>
+<hr>
+<div style="width: 100%; text-align: center"><a href="https://github.com/gmpassos/jolokia-web-viewer" target="_blank">jolokia-web-viewer@GitHub</a></div>
 
 <script id="source" language="javascript" type="text/javascript">
 
