@@ -3,20 +3,24 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <title>Jolokia plot demo</title>
   
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+  <script src="js/jquery.min.js"></script>
   
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.js" integrity="sha256-t7kx8nPDixJ3ucbB9OBcTsCYhaSHvdrzJ54tfkmjjhI=" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.time.js" integrity="sha256-pYLIMq3HE4prBar2HxbrrCdHAfG+Sv6nfnOaHDS5xBo=" crossorigin="anonymous"></script>
+  <script src="js/jquery.flot.js"></script>
+  <script src="js/jquery.flot.time.js"></script>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/json2/20160511/json2.js" integrity="sha256-EZJ68U7eUi8uSP0MRRUalYten2eOlhREE9kJOIbIeYg=" crossorigin="anonymous"></script>
+  <script src="js/json2.js"></script>
   
-  <script src="js/jolokia-min.js"></script>
-  <script src="js/jolokia-simple-min.js"></script>
+  <script src="js/jolokia.js"></script>
+  <script src="js/jolokia-simple.js"></script>
 </head>
 <html>
 <h1>[Jolokia Web Viewer]</h1>
 
-<input type="text" id="endpoint" size="50" value="https://your-gateway/actuator/jolokia"/>
+<label>URL</label>: <input type="text" id="endpoint" size="50" value="https://your.getway/path/to/actuator"/>
+<label>Username</label>: <input type="email" id="username" size="25"/>
+<label>Password</label>: <input type="password" id="password" size="10"/>
+<label>Acess Token</label>: <input type="text" id="token" size="40" value=""/>
+
 <input type="submit" id="start" value="Start"/>
 
 <hr>
@@ -27,23 +31,63 @@
 <br><br>
 
 <hr>
+<h2>Thread Dump</h2>
+
+<div id="thread-dump"></div>
+
+<input type="submit" id="thread-dump-button" value="Thread Dump" disabled="true">
+
+<hr>
+<h2>Heap Dump</h2>
+
+<input type="submit" id="heap-dump-button" value="Heap Dump" disabled="true">
+
+<hr>
 <div style="width: 100%; text-align: center"><a href="https://github.com/gmpassos/jolokia-web-viewer" target="_blank">jolokia-web-viewer@GitHub</a></div>
+
 
 <script id="source" language="javascript" type="text/javascript">
 
+  let apiEndpoint;
+  let apiUsername ;
+  let apiPassword ;
+  let apiToken ;
   let j4p ;
 
   function start() {
-    var inputEndpoint = $("#endpoint") ;
-    var endpoint = inputEndpoint.val() ;
+    let inputEndpoint = $("#endpoint") ;
 
-    console.log("Endpoint: "+ endpoint);
+    apiEndpoint = inputEndpoint.val() ;
 
-    j4p = new Jolokia({url: endpoint,jsonp: true});
+    apiUsername = $("#username").val() ;
+    apiPassword = $("#password").val() ;
+    apiToken = $("#token").val() ;
+
+    if ( apiUsername != null && apiUsername.length === 0 ) {
+      apiUsername = null ;
+    }
+
+    if ( apiPassword != null && apiPassword.length === 0 ) {
+      apiPassword = null ;
+    }
+
+    if ( apiToken != null && apiToken.length === 0 ) {
+      apiToken = null ;
+    }
+
+    j4p = new Jolokia({
+      url: apiEndpoint+"/jolokia",
+      jsonp: true,
+      username: apiUsername,
+      password: apiPassword,
+      access_token: apiToken
+    });
 
     inputEndpoint.prop('disabled', true);
     $("#start").prop('disabled', true);
     $("#gc").prop('disabled', false);
+    $("#thread-dump-button").prop('disabled', false);
+    $("#heap-dump-button").prop('disabled', false);
 
     run();
   }
@@ -86,6 +130,134 @@
                 });
   }
 
+  function json2text(json, filter, parentKey) {
+    if (json == null) return null ;
+
+    let tree = "{" ;
+
+    for(let key in json) {
+      let value = json[key] ;
+
+      let entry = key+": " ;
+
+      if (filter != null) {
+        let filteredValue = filter(key, value, parentKey) ;
+        if ( filteredValue != null ) {
+          entry += filteredValue ;
+          return entry ;
+        }
+      }
+
+      if( value != null && (typeof value === "object") ) {
+        let fullKey = parentKey != null ? parentKey+'/'+key : key ;
+        let subTree = json2text(value, filter, fullKey);
+        entry += subTree +"\n";
+      }
+      else {
+        entry += value ;
+      }
+
+      if (tree.length > 1) tree += " ; ";
+      tree += entry ;
+    }
+
+    tree += "}" ;
+
+    return tree;
+  }
+
+  function json2html(json, filter, parentKey) {
+    let tree = document.createElement('ul') ;
+
+    for(let key in json) {
+      let value = json[key] ;
+
+      let li = tree.appendChild(document.createElement('li'));
+      li.appendChild(document.createTextNode(key+": "));
+
+      if (filter != null) {
+        let filteredValue = filter(key, value, parentKey) ;
+        if ( filteredValue != null ) {
+          if (typeof filteredValue === "object") {
+            li.appendChild(filteredValue);
+          }
+          else {
+            li.firstChild.nodeValue += value ;
+          }
+          continue ;
+        }
+      }
+
+      if (typeof value === "object") {
+        let fullKey = parentKey != null ? parentKey+'/'+key : key ;
+        let subTree = json2html(value, filter, fullKey);
+        li.appendChild(subTree);
+      }
+      else {
+        li.firstChild.nodeValue += value ;
+      }
+    }
+
+    return tree;
+  }
+
+  function threadDump() {
+
+    let url = apiEndpoint+"/threaddump";
+
+    if (apiToken != null) {
+      url += "?access_token="+apiToken ;
+    }
+
+    $.ajax({
+      url: url,
+      beforeSend: function (xhr) {
+        if (apiUsername != null && apiPassword != null) {
+          let tok = apiUsername + ':' + apiPassword ;
+          xhr.setRequestHeader('Authorization', "Basic " + window.btoa(tok));
+        }
+      },
+      success: function(result) {
+        let tree = json2html(result, function(k,v,pk) {
+          if ( pk === "threads" ) {
+            let threadInfos = "["+ v['threadName']+'#'+ v['threadId'] +"]{ daemon: "+ v['daemon'] +" ; state: "+  v['threadState'] +" ; priority: "+ v['priority'] +"}";
+
+            let stackTrace = json2html( v['stackTrace'] , function(k2,v2,pk2) {
+              if (pk2 == null) {
+                let call = ""+ v2['className'] +"."+ v2['methodName'] +"() -- "+ v2['fileName'] +"#"+ v2['lineNumber']+"" ;
+                return document.createTextNode(call) ;
+              }
+              return null ;
+            }) ;
+
+            let div = document.createElement('div') ;
+            div.appendChild( document.createTextNode(threadInfos) ) ;
+            div.appendChild( document.createElement('br') ) ;
+            div.appendChild( stackTrace ) ;
+
+            return div ;
+          }
+          return null ;
+        }) ;
+
+        $("#thread-dump").empty();
+        $("#thread-dump").append(tree);
+      }
+    });
+
+  }
+
+  function heapDump() {
+    let url = apiEndpoint+"/heapdump";
+
+    if (apiToken != null) {
+      url += "?access_token="+apiToken ;
+    }
+
+
+    window.location.href = url ;
+  }
+
   $("#start").click(start);
 
   $("#gc").click(function() {
@@ -95,6 +267,10 @@
           }
      });
   });
+
+  $("#thread-dump-button").click(threadDump);
+
+  $("#heap-dump-button").click(heapDump);
   
 </script>
 </body>

@@ -47,7 +47,7 @@
         // Processing parameters which are added to the
         // URL as query parameters if given as options
         var PROCESSING_PARAMS = ["maxDepth", "maxCollectionSize", "maxObjects", "ignoreErrors", "canonicalNaming",
-                                 "serializeException", "includeStackTrace", "ifModifiedSince"];
+                                 "serializeException", "includeStackTrace", "ifModifiedSince","access_token"];
 
         /**
          * Constructor for creating a client to the Jolokia agent.
